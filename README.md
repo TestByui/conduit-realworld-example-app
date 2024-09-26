@@ -1,5 +1,7 @@
 wadwadwadwadaw# ![RealWorld Example App](logo.png)
 
+v2
+
 > **React / Vite + SWC / Express.js / Sequelize / PostgreSQL codebase containing real world examples (CRUD, auth, advanced patterns, etc) that adheres to the [RealWorld](https://realworld.io/) spec and API.**
 
 This codebase was created to demonstrate a fully fledged fullstack application built with **React / Vite + SWC / Express.js / Sequelize / PostgreSQL** including CRUD operations, authentication, routing, pagination, and more.
@@ -81,7 +83,7 @@ To install the project on your computer, follow these steps:
    npm run sqlz -- db:create
    ```
 
-   > :information_source: The command `npm run sqlz` is an alias for `npx -w backend sequelize-cli`.  
+   > :information_source: The command `npm run sqlz` is an alias for `npx -w backend sequelize-cli`.
    > Execute `npm run sqlz -- --help` to see more of `sequelize-cli` commands availables.
 
 6. Optionally you can run the following command to populate your database with some dummy data:
