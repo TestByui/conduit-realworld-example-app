@@ -1,4 +1,4 @@
-aaaaaaa# ![RealWorld Example App](logo.png)
+bbbbbb# ![RealWorld Example App](logo.png)
 
 v2
 
