@@ -16,6 +16,21 @@ const currentUser = async (req, res, next) => {
   }
 };
 
+//* Current User
+const me = async (req, res, next) => {
+  try {
+    const { loggedUser } = req;
+    if (!loggedUser) throw new UnauthorizedError();
+
+    loggedUser.dataValues.email = req.headers.email;
+    delete req.headers.email;
+
+    res.json({ user: loggedUser });
+  } catch (error) {
+    next(error);
+  }
+};
+
 //* Update User
 const updateUser = async (req, res, next) => {
   try {
