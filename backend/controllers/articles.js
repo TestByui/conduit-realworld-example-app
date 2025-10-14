@@ -1,3 +1,9 @@
+      await appendFollowers(loggedUser, loggedUser);
+      await appendFavorites(loggedUser, article);
+      await article.addTagList(allTagInstances, { transaction: t });
+    const slug = slugify(title);
+    const slugInDB = await Article.findOne({ where: { slug } });
+    if (slugInDB) throw new AlreadyTakenError("Title");
 const {
   AlreadyTakenError,
   FieldRequiredError,
@@ -65,6 +71,7 @@ const allArticles = async (req, res, next) => {
     }
 
     res.json({ articles: articles.rows, articlesCount: articles.count });
+    return res.status(201).json({ article: result });
   } catch (error) {
     next(error);
   }
@@ -76,43 +83,66 @@ const createArticle = async (req, res, next) => {
     const { loggedUser } = req;
     if (!loggedUser) throw new UnauthorizedError();
 
-    const { title, description, body, tagList } = req.body.article;
-    if (!title) throw new FieldRequiredError("A title");
-    if (!description) throw new FieldRequiredError("A description");
-    if (!body) throw new FieldRequiredError("An article body");
+    const { title, description, body, tagList } = req.body.article || {};
+    if (!title || typeof title !== "string" || !title.trim())
+      throw new FieldRequiredError("A title");
+    if (!description || typeof description !== "string" || !description.trim())
+      throw new FieldRequiredError("A description");
+    if (!body || typeof body !== "string" || !body.trim())
+      throw new FieldRequiredError("An article body");
 
-    const slug = slugify(title);
-    const slugInDB = await Article.findOne({ where: { slug: slug } });
-    if (slugInDB) throw new AlreadyTakenError("Title");
-
-    const article = await Article.create({
-      slug: slug,
-      title: title,
-      description: description,
-      body: body,
-    });
-
-    for (const tag of tagList) {
-      const tagInDB = await Tag.findByPk(tag.trim());
-
-      if (tagInDB) {
-        await article.addTagList(tagInDB);
-      } else if (tag.length > 2) {
-        const newTag = await Tag.create({ name: tag.trim() });
-
-        await article.addTagList(newTag);
-      }
+    // Validate and sanitize tagList
+    if (
+      !Array.isArray(tagList) ||
+      tagList.some(tag => typeof tag !== "string" || tag.trim().length < 2)
+    ) {
+      throw new FieldRequiredError("A tagList (each tag must be at least 2 characters)");
     }
+    // Remove duplicates, trim, filter short tags
+    const sanitizedTags = [
+      ...new Set(tagList.map(tag => tag.trim()).filter(t => t.length >= 2)),
+    ];
 
-    delete loggedUser.dataValues.token;
+    // Transaction for atomic insert
+    const result = await Article.sequelize.transaction(async (t) => {
+      const article = await Article.create(
+        {
+          slug,
+          title: title.trim(),
+          description: description.trim(),
+          body: body.trim(),
+        },
+        { transaction: t }
+      );
 
-    article.dataValues.tagList = tagList;
-    article.setAuthor(loggedUser);
-    article.dataValues.author = loggedUser;
-    await appendFollowers(loggedUser, loggedUser);
-    await appendFavorites(loggedUser, article);
+      // Fetch all existing tags at once
+      const existingTags = await Tag.findAll({
+        where: { name: sanitizedTags },
+        transaction: t,
+      });
+      const existingTagNames = existingTags.map(tag => tag.name);
 
-    res.status(201).json({ article });
+      // Create missing tags in one bulk insert
+      const newTagsData = sanitizedTags
+        .filter(tag => !existingTagNames.includes(tag))
+        .map(tag => ({ name: tag }));
+      let newTags = [];
+      if (newTagsData.length > 0) {
+        newTags = await Tag.bulkCreate(newTagsData, { transaction: t });
+      }
+
+      // Combine all tag instances
+      const allTagInstances = [...existingTags, ...newTags];
+
+      // Assign author and prepare response
+      await article.setAuthor(loggedUser, { transaction: t });
+      delete loggedUser.dataValues.token;
+
+      article.dataValues.tagList = sanitizedTags;
+      article.dataValues.author = loggedUser;
+
+      return article;
+    });
   } catch (error) {
     next(error);
   }
